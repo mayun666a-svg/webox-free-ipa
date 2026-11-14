@@ -389,12 +389,35 @@ final class JSRuntime {
         return ctx.evaluateScript("JSON.stringify(typeof __weboxMetadata==='function'?JSON.parse(__weboxMetadata()):null)")?.toString() ?? "null"
     }
 
-    /// 调用模块导出函数（widget.js 的 __weboxInvoke）
+    /// 调用模块导出函数（widget.js 的 __weboxInvoke），返回 JSON 字符串。
+    /// __weboxInvoke 是 async → 返回 Promise；裸 JavaScriptCore 不会自动把 Promise 转成值，
+    /// 必须挂 .then 把结果落到全局，再反复 evaluateScript 驱动 microtask 队列把它取回。
+    /// 每次 evaluateScript 调用都会 drain 一次 JSC 的 job 队列，Task.sleep 同时给异步网络桥接留出时间。
     func invoke(name: String, argsJSON: String) async -> String {
-        ctx.evaluateScript("globalThis.__wbPending = __weboxInvoke(\(jsQuote(name)), \(jsQuote(argsJSON)));")
-        // __weboxInvoke 是 async，返回 Promise；用 await 语义在 JS 侧解开
-        let v = ctx.evaluateScript("(async()=>await globalThis.__wbPending)()")
-        return v?.toString() ?? "null"
+        let key = "__wbInvokeResult"
+        let start: String =
+            "globalThis." + key + "={done:false,value:null,err:null};" +
+            "try{Promise.resolve(__weboxInvoke(" + jsQuote(name) + "," + jsQuote(argsJSON) + "))" +
+            ".then(function(v){globalThis." + key + "={done:true,value:v}}," +
+            "function(e){globalThis." + key + "={done:true,err:String(e)}})}" +
+            "catch(e){globalThis." + key + "={done:true,err:String(e)}};"
+        _ = ctx.evaluateScript(start)
+        for _ in 0..<600 {
+            try? await Task.sleep(nanoseconds: 8_000_000)   // 8ms，最多 ~4.8s
+            let raw: String = ctx.evaluateScript("JSON.stringify(globalThis." + key + ")")?.toString() ?? ""
+            guard let d = raw.data(using: .utf8),
+                  let o = (try? JSONSerialization.jsonObject(with: d)) as? [String: Any],
+                  let done = o["done"] as? Bool, done else { continue }
+            let err: String = o["err"] as? String ?? ""
+            if !err.isEmpty { return "{\"__error__\":" + jsQuote(err) + "}" }
+            if let v = o["value"] as? String { return v }   // __weboxInvoke 已 stringify
+            let v: Any = o["value"] ?? NSNull()
+            if JSONSerialization.isValidJSONObject(v),
+               let dd = try? JSONSerialization.data(withJSONObject: v),
+               let ss = String(data: dd, encoding: .utf8) { return ss }
+            return "null"
+        }
+        return "{\"__error__\":\"timeout\"}"
     }
 }
 
@@ -412,16 +435,4 @@ final class WeBoxPlayerViewController: AVPlayerViewController {
     }
 }
 
-// MARK: - 6. 使用示例（粘进 AppDelegate / SwiftUI .task）
-
-func weboxBootExample() async {
-    let rt = JSRuntime()
-    rt.loadRuntime()
-    if let url = Bundle.main.url(forResource: "demo", withExtension: "js", subdirectory: "modules"),
-       let js = try? String(contentsOf: url, encoding: .utf8) {
-        print("[WeBox] metadata:", rt.loadModule(js))
-        let list = await rt.invoke(name: "loadList", argsJSON: "{\"group\":\"all\"}")
-        print("[WeBox] list:", list)
-        // 解析 list → 用户点选 → loadResource 拿直链 → WeBoxPlayerViewController.present
-    }
-}
+// MARK: - 5. 播放器入口：拿到 JS 规则吐出的直链后走 AVPlayer
