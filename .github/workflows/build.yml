@@ -1,0 +1,36 @@
+name: Build WeBox free IPA (unsigned/ad-hoc)
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: macos-14
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Select Xcode
+        run: sudo xcode-select -s /Applications/Xcode.app || xcodebuild -version
+
+      - name: Build arm64 Mach-O + package IPA
+        run: |
+          chmod +x build.sh
+          ./build.sh
+
+      - name: Verify artifact
+        run: |
+          ls -la WeBox.ipa
+          unzip -l WeBox.ipa | rg 'Payload/WeBox.app/WeBox|Info.plist|runtime/|modules/' | head -20
+          file Payload/WeBox.app/WeBox
+
+      - name: Upload IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: WeBox-free-ipa
+          path: WeBox.ipa
+          if-no-files-found: error
+          retention-days: 14
