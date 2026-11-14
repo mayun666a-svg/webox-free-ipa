@@ -246,12 +246,24 @@ final class AsyncBridge {
         }
         let (data, resp) = try await URLSession.shared.data(for: r)
         let h = resp as? HTTPURLResponse
+        let status: Int = h?.statusCode ?? 0
         let decodable = p["decodable"] as? Bool ?? true
-        let body: Any = decodable ? (String(data: data, encoding: .utf8) ?? "") : data.base64EncodedString()
-        return json(["statusCode": h?.statusCode ?? 0, "status": h?.statusCode ?? 0,
-                     "data": body, "body": body,
-                     "headers": h?.allHeaderFields.reduce(into: [String: String]()) { $0["\($0.key)"] = "\($0.value)" } ?? [:],
-                     "url": h?.url?.absoluteString ?? s])
+        let body: String = decodable
+            ? (String(data: data, encoding: .utf8) ?? "")
+            : data.base64EncodedString()
+        var headers: [String: String] = [:]
+        for (key, value) in h?.allHeaderFields ?? [:] {
+            headers["\(key)"] = "\(value)"
+        }
+        let finalURL: String = h?.url?.absoluteString ?? s
+        var result: [String: Any] = [:]
+        result["statusCode"] = status
+        result["status"] = status
+        result["data"] = body
+        result["body"] = body
+        result["headers"] = headers
+        result["url"] = finalURL
+        return json(result)
     }
 
     private func tmdb(_ p: [String: Any]) async throws -> String {
