@@ -1,8 +1,6 @@
 name: Build WeBox free IPA (unsigned/ad-hoc)
 
 on:
-  push:
-    branches: [ main ]
   workflow_dispatch:
 
 jobs:
