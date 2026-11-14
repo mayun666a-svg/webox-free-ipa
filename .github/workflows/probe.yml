@@ -1,0 +1,24 @@
+name: Probe runner availability
+on:
+  workflow_dispatch:
+jobs:
+  linux:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "LINUX_OK"; uname -a
+  macos13:
+    runs-on: macos-13
+    steps:
+      - run: echo "MAC13_OK"; sw_vers
+  macos14:
+    runs-on: macos-14
+    steps:
+      - run: echo "MAC14_OK"; sw_vers
+  macos15:
+    runs-on: macos-15
+    steps:
+      - run: echo "MAC15_OK"; sw_vers
+  macoslatest:
+    runs-on: macos-latest
+    steps:
+      - run: echo "MACLATEST_OK"; sw_vers
