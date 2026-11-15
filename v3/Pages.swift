@@ -26,14 +26,14 @@ import AVKit
     }
     func manage(_ kind:String){present(SourceSheet(manage:true,kind:kind,onSelect:{[weak self]s in self?.select?(s)}),animated:true)}
     func appearance(){let a=UIAlertController(title:"外观模式",message:nil,preferredStyle:.actionSheet);for (title,style) in [("黑暗",UIUserInterfaceStyle.dark),("明亮",.light),("跟随系统",.unspecified)] {a.addAction(UIAlertAction(title:title,style:.default){[weak self]_ in UserDefaults.standard.set(title,forKey:"appearanceTitle");self?.view.window?.overrideUserInterfaceStyle=style;self?.rebuild()})};a.addAction(UIAlertAction(title:"取消",style:.cancel));a.popoverPresentationController?.sourceView=view;present(a,animated:true)}
-    func tmdbSettings(){let a=UIAlertController(title:"TMDB 服务",message:"配置 API 服务与自己的 API Key",preferredStyle:.alert);a.addTextField{$0.placeholder="https://api.themoviedb.org/3";$0.text=UserDefaults.standard.string(forKey:"tmdbBase") ?? "https://api.themoviedb.org/3";$0.autocapitalizationType = .none};a.addTextField{$0.placeholder="TMDB API Key（可选）";$0.isSecureTextEntry=true;$0.text=UserDefaults.standard.string(forKey:"tmdbKey")};a.addAction(UIAlertAction(title:"保存",style:.default){_ in UserDefaults.standard.set(a.textFields?[0].text,forKey:"tmdbBase");UserDefaults.standard.set(a.textFields?[1].text,forKey:"tmdbKey")});a.addAction(UIAlertAction(title:"取消",style:.cancel));present(a,animated:true)}
+    func tmdbSettings(){let a=UIAlertController(title:"TMDB 服务",message:"配置 API 服务与自己的 API Key",preferredStyle:.alert);a.addTextField{$0.placeholder="https://tmdb.quswer.com/";$0.text=UserDefaults.standard.string(forKey:"tmdbBase") ?? "https://tmdb.quswer.com/";$0.autocapitalizationType = .none};a.addTextField{$0.placeholder="TMDB API Key（可选）";$0.isSecureTextEntry=true;$0.text=UserDefaults.standard.string(forKey:"tmdbKey")};a.addAction(UIAlertAction(title:"保存",style:.default){_ in UserDefaults.standard.set(a.textFields?[0].text,forKey:"tmdbBase");UserDefaults.standard.set(a.textFields?[1].text,forKey:"tmdbKey")});a.addAction(UIAlertAction(title:"取消",style:.cancel));present(a,animated:true)}
     func playback(){let a=UIAlertController(title:"播放设置",message:"iOS 播放引擎：AVPlayer",preferredStyle:.actionSheet);for r in [0.75,1,1.25,1.5,2] {a.addAction(UIAlertAction(title:"默认速度 \(r)×",style:.default){_ in UserDefaults.standard.set(r,forKey:"playbackRate")})};a.addAction(UIAlertAction(title:"取消",style:.cancel));a.popoverPresentationController?.sourceView=view;present(a,animated:true)}
     func backup(){let u=Library.shared.folder.appendingPathComponent("library.json");let a=UIActivityViewController(activityItems:[u],applicationActivities:nil);a.popoverPresentationController?.sourceView=view;present(a,animated:true)}
     func diagnostics(){let text="WeBox iOS v3\n内容源: \(Library.shared.sources.count)\n当前: \(Library.shared.selected)\n播放器: AVPlayer\n系统: \(UIDevice.current.systemVersion)";alert("诊断日志",text)}
 }
 
 @MainActor final class BrowsePage:ScrollPage {
-    var session:ModuleSession?;var source:Source?;var items:[[String:Any]]=[];let grid=WB.stack(.vertical,12);var titleButton:UIButton!;var query=WB.field("搜索")
+    var session:ModuleSession?;var source:Source?;var items:[[String:Any]]=[];var menus:[FavoriteMenu]=[];let grid=WB.stack(.vertical,12);var titleButton:UIButton!;var query=WB.field("搜索")
     override func viewDidLoad(){super.viewDidLoad();heading.text="发现";let top=WB.stack(.vertical,12);top.isLayoutMarginsRelativeArrangement=true;top.layoutMargins=UIEdgeInsets(top:0,left:20,bottom:12,right:20);titleButton=WB.button("TMDB  ﹀"){[weak self] in self?.present(SourceSheet(onSelect:{s in self?.load(s)}),animated:true)};titleButton.contentHorizontalAlignment = .left;top.addArrangedSubview(titleButton);query.returnKeyType = .search;query.addTarget(self,action:#selector(searchNow),for:.editingDidEndOnExit);top.addArrangedSubview(query);content.addArrangedSubview(top);grid.isLayoutMarginsRelativeArrangement=true;grid.layoutMargins=UIEdgeInsets(top:8,left:20,bottom:0,right:20);content.addArrangedSubview(grid);load(Library.shared.source(Library.shared.selected) ?? Library.shared.sources[0])}
     @objc func searchNow(){query.resignFirstResponder();guard let s=source else{return};Task {await fetch(s,query:query.text ?? "")}}
     func load(_ s:Source){loadViewIfNeeded();source=s;Library.shared.selected=s.id;titleButton.setTitle(s.title+"  ﹀",for:.normal);heading.text="发现";Task {await fetch(s)}}
@@ -49,7 +49,7 @@ import AVKit
         }catch{message(error.localizedDescription)}
     }
     func tmdb(_ q:String?) async throws {
-        let base=UserDefaults.standard.string(forKey:"tmdbBase") ?? "https://api.themoviedb.org/3"
+        let base=UserDefaults.standard.string(forKey:"tmdbBase") ?? "https://tmdb.quswer.com/"
         let key=UserDefaults.standard.string(forKey:"tmdbKey") ?? ""
         guard !key.isEmpty || !base.contains("api.themoviedb.org") else {message("发现喜欢的影视，留住想看的故事。\n\n在设置中配置 TMDB 服务，或点击上方「TMDB ﹀」切换到已导入的内容源。");return}
         var c=URLComponents(string:base.trimmingCharacters(in:CharacterSet(charactersIn:"/"))+(q==nil ? "/trending/all/week":"/search/multi"))!
@@ -58,13 +58,15 @@ import AVKit
         let o=try JSONSerialization.jsonObject(with:d) as? [String:Any];let results=o?["results"] as? [[String:Any]] ?? []
         items=results.map{v in var x=v;x["title"]=v["title"] ?? v["name"];if let p=v["poster_path"] as? String{x["posterPath"]="https://image.tmdb.org/t/p/w500"+p};return x};render(items)
     }
-    func render(_ list:[[String:Any]]){grid.arrangedSubviews.forEach{$0.removeFromSuperview()};guard !list.isEmpty else{message("这个内容源没有栏目结果。可以使用上方搜索查找内容。");return}
+    func render(_ list:[[String:Any]]){menus=[];grid.arrangedSubviews.forEach{$0.removeFromSuperview()};guard !list.isEmpty else{message("这个内容源没有栏目结果。可以使用上方搜索查找内容。");return}
         for idx in stride(from:0,to:list.count,by:3){let row=WB.stack(.horizontal,10);row.distribution = .fillEqually
             for i in idx..<min(idx+3,list.count){let item=list[i];let tile=UIControl();let box=WB.stack(.vertical,7);box.isUserInteractionEnabled=false;box.translatesAutoresizingMaskIntoConstraints=false;tile.addSubview(box);NSLayoutConstraint.activate([box.leadingAnchor.constraint(equalTo:tile.leadingAnchor),box.trailingAnchor.constraint(equalTo:tile.trailingAnchor),box.topAnchor.constraint(equalTo:tile.topAnchor),box.bottomAnchor.constraint(equalTo:tile.bottomAnchor)])
                 let cover=UIImageView();cover.contentMode = .scaleAspectFill;cover.clipsToBounds=true;cover.layer.cornerRadius=12;cover.backgroundColor=WB.surface;cover.heightAnchor.constraint(equalTo:cover.widthAnchor,multiplier:1.45).isActive=true;box.addArrangedSubview(cover)
                 if let p=(item["posterPath"] as? String) ?? (item["poster"] as? String),let u=URL(string:p),u.scheme?.hasPrefix("http")==true {URLSession.shared.dataTask(with:u){d,_,_ in guard let d=d,let im=UIImage(data:d)else{return};DispatchQueue.main.async{cover.image=im}}.resume()}
                 let label=WB.label((item["title"] as? String) ?? "未命名",13);label.numberOfLines=2;label.heightAnchor.constraint(equalToConstant:36).isActive=true;box.addArrangedSubview(label)
-                tile.addAction(UIAction{[weak self]_ in self?.open(item)},for:.touchUpInside);row.addArrangedSubview(tile)
+                tile.addAction(UIAction{[weak self]_ in self?.open(item)},for:.touchUpInside)
+                let menu=FavoriteMenu(item:item);menus.append(menu);tile.addInteraction(UIContextMenuInteraction(delegate:menu))
+                row.addArrangedSubview(tile)
             };while row.arrangedSubviews.count<3{row.addArrangedSubview(UIView())};grid.addArrangedSubview(row)
         }
     }
@@ -96,10 +98,20 @@ import AVKit
     override func viewDidLoad(){super.viewDidLoad();view.backgroundColor=WB.bg;overrideUserInterfaceStyle = .dark;host.frame=view.bounds;host.autoresizingMask=[.flexibleWidth,.flexibleHeight];view.addSubview(host);settings.select={[weak self]s in self?.switchTo(0);self?.discover.load(s)}
         favorites.heading.text="收藏";bar.translatesAutoresizingMaskIntoConstraints=false;bar.layer.cornerRadius=27;bar.clipsToBounds=true;bar.layer.borderWidth=0.7;bar.layer.borderColor=UIColor.white.withAlphaComponent(0.16).cgColor;view.addSubview(bar)
         let row=WB.stack(.horizontal);row.distribution = .fillEqually;row.translatesAutoresizingMaskIntoConstraints=false;bar.contentView.addSubview(row);selected.backgroundColor=UIColor.white.withAlphaComponent(0.10);selected.layer.cornerRadius=23;bar.contentView.insertSubview(selected,at:0)
-        for (i,symbol) in ["house","heart","gearshape"].enumerated(){let b=UIButton(type:.system);b.setImage(UIImage(systemName:symbol,withConfiguration:UIImage.SymbolConfiguration(pointSize:22,weight:.medium)),for:.normal);b.tintColor=WB.text;b.accessibilityLabel=["发现","收藏","设置"][i];b.addAction(UIAction{[weak self]_ in self?.switchTo(i)},for:.touchUpInside);row.addArrangedSubview(b);buttons.append(b)}
+        for (i,symbol) in ["house","heart","gearshape"].enumerated(){let b=UIButton(type:.system);b.setImage(WB.image(symbol),for:.normal);b.tintColor=WB.text;b.accessibilityLabel=["发现","收藏","设置"][i];b.addAction(UIAction{[weak self]_ in self?.switchTo(i)},for:.touchUpInside);row.addArrangedSubview(b);buttons.append(b)}
         NSLayoutConstraint.activate([bar.widthAnchor.constraint(equalToConstant:174),bar.heightAnchor.constraint(equalToConstant:54),bar.centerXAnchor.constraint(equalTo:view.centerXAnchor),bar.bottomAnchor.constraint(equalTo:view.safeAreaLayoutGuide.bottomAnchor,constant:-10),row.leadingAnchor.constraint(equalTo:bar.contentView.leadingAnchor,constant:6),row.trailingAnchor.constraint(equalTo:bar.contentView.trailingAnchor,constant:-6),row.topAnchor.constraint(equalTo:bar.contentView.topAnchor,constant:3),row.bottomAnchor.constraint(equalTo:bar.contentView.bottomAnchor,constant:-3)])
         switchTo(0)
     }
     override func viewDidLayoutSubviews(){super.viewDidLayoutSubviews();selected.frame=CGRect(x:6+CGFloat(index)*54,y:4,width:54,height:46)}
-    func switchTo(_ i:Int){index=i;let child=i==0 ? discover:i==1 ? favorites:settings;children.forEach{$0.willMove(toParent:nil);$0.view.removeFromSuperview();$0.removeFromParent()};addChild(child);child.view.frame=host.bounds;child.view.autoresizingMask=[.flexibleWidth,.flexibleHeight];host.addSubview(child.view);child.didMove(toParent:self);if i==1{favorites.content.arrangedSubviews.dropFirst().forEach{$0.removeFromSuperview()};let l=WB.label("还没有收藏的内容",14,false,WB.secondary);l.textAlignment = .center;l.heightAnchor.constraint(equalToConstant:150).isActive=true;favorites.content.addArrangedSubview(l)};buttons.enumerated().forEach{$0.element.tintColor=$0.offset==i ? WB.accent:WB.text};view.setNeedsLayout()}
+    func switchTo(_ i:Int){index=i;let child=i==0 ? discover:i==1 ? favorites:settings;children.forEach{$0.willMove(toParent:nil);$0.view.removeFromSuperview();$0.removeFromParent()};addChild(child);child.view.frame=host.bounds;child.view.autoresizingMask=[.flexibleWidth,.flexibleHeight];host.addSubview(child.view);child.didMove(toParent:self);if i==1{favorites.heading.text="收藏";favorites.content.arrangedSubviews.dropFirst().forEach{$0.removeFromSuperview()};let saved=Library.shared.favorites
+        if saved.isEmpty {let l=WB.label("还没有收藏的内容",14,false,WB.secondary);l.textAlignment = .center;l.heightAnchor.constraint(equalToConstant:150).isActive=true;favorites.content.addArrangedSubview(l)}
+        for item in saved {let r=SettingRow("heart",item["title"] as? String ?? "收藏"){[weak self] in let a=UIAlertController(title:item["title"] as? String,message:item["overview"] as? String,preferredStyle:.alert);a.addAction(UIAlertAction(title:"移除收藏",style:.destructive){_ in Library.shared.favorites=Library.shared.favorites.filter{jsonText($0) != jsonText(item)};self?.switchTo(1)});a.addAction(UIAlertAction(title:"关闭",style:.cancel));self?.present(a,animated:true)};favorites.content.addArrangedSubview(r)} };buttons.enumerated().forEach{$0.element.tintColor=$0.offset==i ? WB.accent:WB.text};view.setNeedsLayout()}
+}
+
+@MainActor final class FavoriteMenu:NSObject,UIContextMenuInteractionDelegate {
+ let item:[String:Any]
+ init(item:[String:Any]){self.item=item}
+ func contextMenuInteraction(_ interaction:UIContextMenuInteraction,configurationForMenuAtLocation location:CGPoint)->UIContextMenuConfiguration? {
+  UIContextMenuConfiguration(identifier:nil,previewProvider:nil){_ in UIMenu(children:[UIAction(title:"收藏",image:WB.image("heart")){_ in var list=Library.shared.favorites;if !list.contains(where:{jsonText($0)==jsonText(self.item)}){list.append(self.item)};Library.shared.favorites=list}])}
+ }
 }

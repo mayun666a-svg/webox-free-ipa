@@ -59,7 +59,7 @@ final class SyncBridge {
 
         // --- 能力声明 ---
         case "runtime.capabilities":
-            return json(["compute": true, "dom": true, "memoryHls": true,
+            return json(["compute": true, "dom": false, "memoryHls": true,
                          "mediaProcessor": true, "binary": true, "protocol": "0.0.7"])
 
         // --- URL ---
@@ -110,7 +110,7 @@ final class SyncBridge {
         case "crypto.hash":    return json(hash(p["text"] as? String ?? "", alg: p["algorithm"] as? String ?? "MD5"))
         case "crypto.hmac":    return json(hmac(p["text"] as? String ?? "", key: p["key"] as? String ?? "", alg: p["algorithm"] as? String ?? "SHA256"))
         case "crypto.aes":     return cryptoAES(p)
-        case "crypto.rsa":     return json("")   // 用 SecKey 实现，按需补
+        case "crypto.rsa":     return json(["error":"当前移植版尚未实现 RSA 原生桥接"])
 
         // --- binary.*（在内存里维护 Data 句柄，避免落盘） ---
         case "binary.size":     return json(binaryHandles[p["handle"] as? String ?? ""]?.count ?? 0)
@@ -291,7 +291,7 @@ final class AsyncBridge {
         """
         // 实机在 WKWebView 里 loadHTMLString 并挂 WKScriptMessageHandler 收 messageType；
         // 这里返回结构化占位，接入点已留好（见 README §DOM）。
-        return json(["ok": true, "value": ["result": [:], "viewport": [390, 844], "userAgent": ua]])
+        return json(["error":"当前移植版尚未实现 DOM 验证沙箱"])
     }
 
     private func compute(_ p: [String: Any]) async throws -> String {

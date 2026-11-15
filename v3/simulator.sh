@@ -22,8 +22,13 @@ for screen in settings import sources; do
   xcrun simctl io "$UDID" screenshot "evidence/$screen.png"
 done
 xcrun simctl terminate "$UDID" dev.webox.app.ios || true
+mkdir -p /tmp/webox-fixtures
+printf '{"value":"probe"}' > /tmp/webox-fixtures/probe.json
+printf '{"value":"a"}' > /tmp/webox-fixtures/a.json
+printf '{"value":"b"}' > /tmp/webox-fixtures/b.json
+python3 -m http.server 8877 --directory /tmp/webox-fixtures > evidence/http.log 2>&1 &
 xcrun simctl launch "$UDID" dev.webox.app.ios --self-test
-sleep 10
+sleep 18
 DATA=$(xcrun simctl get_app_container "$UDID" dev.webox.app.ios data)
 cp "$DATA/Documents/selftest.json" evidence/selftest.json
 python3 - <<'PY'
@@ -32,5 +37,11 @@ r=json.load(open('evidence/selftest.json'))
 for k in ['loadList','search','loadResource']:
  assert isinstance(r.get(k),list) and len(r[k])>0,(k,r)
 assert r['scalarJSON'] != 'nil',r
-print('Runtime demo calls and scalar JSON passed')
+assert r.get('fileImportAdded') == 1,r
+assert r.get('importedList'),r
+assert r.get('libraryReloadCount') == 3,r
+assert r.get('networkProbe',[{}])[0].get('status') == 200,r
+assert len(r.get('concurrentProbe',[])) == 2,r
+assert all(x['status'] == 200 for x in r['concurrentProbe']),r
+print('PASS: demo calls, scalar JSON, file import, persistence, HTTP, concurrent requests')
 PY

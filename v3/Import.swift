@@ -3,7 +3,7 @@ import UniformTypeIdentifiers
 
 @MainActor final class ImportSheet:SheetVC,UIDocumentPickerDelegate {
     let link=WB.field("粘贴内容源链接"),name=WB.field("使用内容源原有名称"),logo=WB.field("留空自动获取网站图标")
-    let modes=UISegmentedControl(items:["链接","本地文件"])
+    let modes=PillSegment(items:["链接","本地文件"])
     let typeGrid=WB.stack(.vertical,6),custom=WB.stack(.vertical,8)
     let types=[("auto","自动识别"),("json","JSON 网页源"),("js","JS 内容源"),("vod","VOD 接口"),("m3u","M3U 直播源"),("podcast","播客 JS 源"),("radio","电台 JS 源")]
     var kind="auto",busy=false;var customButton:UIButton!;var typeButton:UIButton!;var submit:UIButton!;var fileButton:UIButton!;var status=WB.label("",12,false,WB.secondary)
@@ -42,11 +42,11 @@ import UniformTypeIdentifiers
     override func viewDidLoad(){super.viewDidLoad();sheetPresentationController?.detents=[.large()];if Library.shared.sources.count>6 || management {body.addArrangedSubview(search);search.addAction(UIAction{[weak self]_ in self?.rebuild()},for:.editingChanged)};body.addArrangedSubview(list)
         if management{bottom.addArrangedSubview(WB.button("导入内容源",true){[weak self] in self?.present(ImportSheet(),animated:true)})};rebuild();NotificationCenter.default.addObserver(forName:Notification.Name("libraryChanged"),object:nil,queue:.main){[weak self]_ in self?.rebuild()}
     }
-    func rebuild(){list.arrangedSubviews.forEach{$0.removeFromSuperview()};let q=(search.text ?? "").lowercased();let kinds=[("library","资料库"),("podcast","播客"),("radio","电台"),("json","JSON"),("js","JS"),("vod","VOD"),("m3u","M3U")]
-        for (kind,title) in kinds {let sources=Library.shared.sources.filter{(filter==nil || $0.kind==filter) && $0.kind==kind && (q.isEmpty || $0.title.lowercased().contains(q))};if sources.isEmpty{continue}
+    func rebuild(){list.arrangedSubviews.forEach{$0.removeFromSuperview()};let q=(search.text ?? "").lowercased();let kinds=[("library","资料库"),("json","JSON"),("js","JS"),("vod","VOD"),("m3u","M3U")]
+        for (kind,title) in kinds {let sources=Library.shared.sources.filter{(filter==nil || $0.kind==filter) && (kind=="library" ? ["library","podcast","radio"].contains($0.kind):$0.kind==kind) && (q.isEmpty || $0.title.lowercased().contains(q))};if sources.isEmpty{continue}
             let label=WB.label(title,11,true,WB.secondary);let pad=UIView();pad.addSubview(label);label.frame=CGRect(x:10,y:12,width:200,height:20);pad.heightAnchor.constraint(equalToConstant:36).isActive=true;list.addArrangedSubview(pad)
             for source in sources {let row=UIControl();let horizontal=WB.stack(.horizontal,14);horizontal.isUserInteractionEnabled=false;horizontal.alignment = .center;horizontal.translatesAutoresizingMaskIntoConstraints=false;row.addSubview(horizontal);horizontal.addArrangedSubview(Badge(source));horizontal.addArrangedSubview(WB.label(source.title,14,Library.shared.selected==source.id));if Library.shared.selected==source.id{horizontal.addArrangedSubview(WB.icon("checkmark",20,WB.accent));row.backgroundColor=WB.accent.withAlphaComponent(0.16);row.layer.cornerRadius=16}
-                NSLayoutConstraint.activate([row.heightAnchor.constraint(equalToConstant:52),horizontal.leadingAnchor.constraint(equalTo:row.leadingAnchor,constant:12),horizontal.trailingAnchor.constraint(equalTo:row.trailingAnchor,constant:-12),horizontal.centerYAnchor.constraint(equalTo:row.centerYAnchor)])
+                NSLayoutConstraint.activate([row.heightAnchor.constraint(equalToConstant:48),horizontal.leadingAnchor.constraint(equalTo:row.leadingAnchor,constant:12),horizontal.trailingAnchor.constraint(equalTo:row.trailingAnchor,constant:-12),horizontal.centerYAnchor.constraint(equalTo:row.centerYAnchor)])
                 row.addAction(UIAction{[weak self]_ in guard let self=self else{return};if self.management {self.manage(source)}else{Library.shared.selected=source.id;self.dismiss(animated:true){self.choose?(source)}}},for:.touchUpInside);list.addArrangedSubview(row)
             }
         }

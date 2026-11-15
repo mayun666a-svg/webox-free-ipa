@@ -14,6 +14,20 @@ import UIKit
             report["scalarJSON"]=rt.sync.run("{\"method\":\"url.validate\",\"params\":{\"url\":\"https://example.com/\"}}") ?? "nil"
             let dir=FileManager.default.urls(for:.documentDirectory,in:.userDomainMask)[0]
             try? jsonText(report).write(to:dir.appendingPathComponent("selftest.json"),atomically:true,encoding:.utf8)
+            if let demo=Bundle.main.url(forResource:"demo",withExtension:"js",subdirectory:"modules") {
+                let imported=await Library.shared.importURL(demo,name:"自测公开示例")
+                report["fileImportAdded"]=imported.added.count;report["fileImportFailed"]=imported.failed
+                if let added=imported.added.first,let session=try? ModuleSession(added) {report["importedList"]=try? await session.list();Library.shared.remove(added.id)}
+                report["libraryReloadCount"]=Library().sources.count
+            }
+            let networkCode="""
+            async function networkProbe(){var r=await Widget.http.get('http://127.0.0.1:8877/probe.json',{params:{one:'1'}});return [{status:r.statusCode,data:r.data}];}
+            async function concurrentProbe(){var r=await Promise.all([Widget.http.get('http://127.0.0.1:8877/a.json'),Widget.http.get('http://127.0.0.1:8877/b.json')]);return r.map(x=>({status:x.statusCode,data:x.data}));}
+            """
+            rt.ctx.evaluateScript(networkCode)
+            report["networkProbe"]=jsonValue(await rt.invoke(name:"networkProbe",argsJSON:"[]"))
+            report["concurrentProbe"]=jsonValue(await rt.invoke(name:"concurrentProbe",argsJSON:"[]"))
+            try? jsonText(report).write(to:dir.appendingPathComponent("selftest.json"),atomically:true,encoding:.utf8)
             print("WEBOX_SELFTEST",jsonText(report));_ = source
         }}
         return true
