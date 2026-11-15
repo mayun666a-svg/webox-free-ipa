@@ -1,0 +1,20 @@
+name: WeBox v3 inspected-port
+on: workflow_dispatch
+jobs:
+  port:
+    runs-on: macos-15
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build physical-device IPA
+        run: bash v3/build.sh
+      - name: Simulator launch, screenshots, JS self-test
+        run: bash v3/simulator.sh
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: WeBox-v3-evidence
+          path: |
+            v3/WeBox-v3.ipa
+            v3/evidence/
+          retention-days: 7
