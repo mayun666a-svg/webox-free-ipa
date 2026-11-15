@@ -67,7 +67,9 @@ class SheetVC:UIViewController {
     required init?(coder:NSCoder){fatalError()}
     override func viewDidLoad(){super.viewDidLoad();view.backgroundColor=WB.bg;overrideUserInterfaceStyle = .dark
         if let s=sheetPresentationController{s.prefersGrabberVisible=true;s.preferredCornerRadius=28;s.detents=[.custom(identifier:.init("content")){[weak self] ctx in min(self?.preferredHeight ?? 500,ctx.maximumDetentValue)},.large()];s.selectedDetentIdentifier = .init("content");s.prefersScrollingExpandsWhenScrolledToEdge=true}
-        let blur=UIVisualEffectView(effect:UIBlurEffect(style:.systemUltraThinMaterialDark));blur.frame=view.bounds;blur.autoresizingMask=[.flexibleWidth,.flexibleHeight];view.addSubview(blur)
+        // 原版是带材质的底部面板，但 iOS 的 UIVisualEffectView 会把 presenting 的设置页透出来，
+        // 导致“设置分组”和“导入表单”叠在一屏。这里改用不透明渐变背板，保留层次但彻底遮住底页。
+        let backdrop=SheetBackdrop(frame:view.bounds);backdrop.autoresizingMask=[.flexibleWidth,.flexibleHeight];view.insertSubview(backdrop,at:0)
         let header=WB.stack(.horizontal,8);header.alignment = .center;header.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(header);header.addArrangedSubview(WB.label(caption,19,true));let close=UIButton(type:.system);close.setImage(UIImage(systemName:"xmark"),for:.normal);close.tintColor=WB.secondary;close.widthAnchor.constraint(equalToConstant:48).isActive=true;close.heightAnchor.constraint(equalToConstant:48).isActive=true;close.addAction(UIAction{[weak self]_ in self?.dismiss(animated:true)},for:.touchUpInside);header.addArrangedSubview(close)
         scroll.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(scroll);scroll.keyboardDismissMode = .interactive;body.translatesAutoresizingMaskIntoConstraints=false;scroll.addSubview(body);bottom.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(bottom)
         NSLayoutConstraint.activate([header.topAnchor.constraint(equalTo:view.topAnchor,constant:22),header.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),header.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-12),scroll.topAnchor.constraint(equalTo:header.bottomAnchor,constant:10),scroll.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),scroll.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-20),scroll.bottomAnchor.constraint(equalTo:bottom.topAnchor,constant:-12),body.topAnchor.constraint(equalTo:scroll.contentLayoutGuide.topAnchor),body.bottomAnchor.constraint(equalTo:scroll.contentLayoutGuide.bottomAnchor),body.leadingAnchor.constraint(equalTo:scroll.contentLayoutGuide.leadingAnchor),body.trailingAnchor.constraint(equalTo:scroll.contentLayoutGuide.trailingAnchor),body.widthAnchor.constraint(equalTo:scroll.frameLayoutGuide.widthAnchor),bottom.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),bottom.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-20),bottom.bottomAnchor.constraint(equalTo:view.safeAreaLayoutGuide.bottomAnchor,constant:-14)])
@@ -78,6 +80,13 @@ class SheetVC:UIViewController {
         if abs(desired-preferredHeight)>2 {preferredHeight=desired;sheetPresentationController?.invalidateDetents()}
     }
     func error(_ message:String){let a=UIAlertController(title:"未能完成",message:message,preferredStyle:.alert);a.addAction(UIAlertAction(title:"好",style:.default));present(a,animated:true)}
+}
+
+final class SheetBackdrop:UIView {
+    private let gradient=CAGradientLayer()
+    override init(frame:CGRect){super.init(frame:frame);backgroundColor=UIColor(red:0.055,green:0.065,blue:0.078,alpha:1);gradient.colors=[UIColor(red:0.11,green:0.13,blue:0.16,alpha:1).cgColor,UIColor(red:0.055,green:0.065,blue:0.078,alpha:1).cgColor];gradient.startPoint=CGPoint(x:0,y:0);gradient.endPoint=CGPoint(x:1,y:1);layer.addSublayer(gradient)}
+    required init?(coder:NSCoder){fatalError()}
+    override func layoutSubviews(){super.layoutSubviews();gradient.frame=bounds}
 }
 
 final class PillSegment:UIControl {
