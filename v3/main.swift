@@ -6,7 +6,8 @@ import UniformTypeIdentifiers
         window=UIWindow(frame:UIScreen.main.bounds);let root=RootController();window?.rootViewController=root;window?.makeKeyAndVisible()
         let args=ProcessInfo.processInfo.arguments
         if args.contains("--settings") || args.contains("--import") || args.contains("--import-file") || args.contains("--sources") {root.switchTo(2)}
-        DispatchQueue.main.asyncAfter(deadline:.now()+0.8){if args.contains("--import") || args.contains("--import-file"){let sheet=ImportSheet();root.settings.present(sheet,animated:false);sheet.loadViewIfNeeded();if args.contains("--import-file"){sheet.modes.selectedSegmentIndex=1;sheet.update()}}else if args.contains("--sources"){root.settings.present(SourceSheet(),animated:false)}}
+        if args.contains("--home") {root.switchTo(0)}
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.8){if args.contains("--import") || args.contains("--import-file") || args.contains("--import-keyboard"){let sheet=ImportSheet();root.settings.present(sheet,animated:false);sheet.loadViewIfNeeded();if args.contains("--import-file"){sheet.modes.selectedSegmentIndex=1;sheet.update()}else if args.contains("--import-keyboard"){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){sheet.link.becomeFirstResponder()}}}else if args.contains("--sources"){root.settings.present(SourceSheet(),animated:false)}}
         if args.contains("--self-test") {Task { @MainActor in
             var report:[String:Any]=[:]
             let rt=JSRuntime();rt.loadRuntime()
@@ -38,6 +39,7 @@ import UniformTypeIdentifiers
                 report["pickerCallbackStatus"]=ui.status.text;report["pickerCallbackSaved"]=Library.shared.sources.contains{$0.id != "tmdb" && !$0.builtin && $0.title == "公开示例"}
                 for s in Library.shared.sources where !s.builtin {Library.shared.remove(s.id)};ui.dismiss(animated:false)
             }
+            let kb=ImportSheet();root.present(kb,animated:false);kb.loadViewIfNeeded();kb.link.becomeFirstResponder();try? await Task.sleep(nanoseconds:400_000_000);report["keyboardFocus"]=kb.link.isFirstResponder;kb.dismissKeyboard();try? await Task.sleep(nanoseconds:300_000_000);report["keyboardDismissed"]=!kb.link.isFirstResponder;kb.dismiss(animated:false)
             let networkCode="""
             async function networkProbe(){var r=await Widget.http.get('http://127.0.0.1:8877/probe.json',{params:{one:'1'}});return [{status:r.statusCode,data:r.data}];}
             async function concurrentProbe(){var r=await Promise.all([Widget.http.get('http://127.0.0.1:8877/a.json'),Widget.http.get('http://127.0.0.1:8877/b.json')]);return r.map(x=>({status:x.statusCode,data:x.data}));}

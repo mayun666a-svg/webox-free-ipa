@@ -15,7 +15,7 @@ xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl status_bar "$UDID" override --time 18:43 --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 91
 xcrun simctl install "$UDID" Sim/WeBox.app
-for screen in settings import import-file sources; do
+for screen in settings import import-file import-keyboard sources home; do
   xcrun simctl terminate "$UDID" dev.webox.app.ios || true
   xcrun simctl launch "$UDID" dev.webox.app.ios --"$screen"
   sleep 4
@@ -47,5 +47,7 @@ assert r.get('capabilityMetadataImportAdded') == 1,r
 assert r.get('capabilityMetadataImportErrors') == [],r
 assert any('fixture-specific-error' in x for x in r.get('invalidScriptErrors',[])),r
 assert r.get('pickerCallbackSaved') == True,r
+assert r.get('keyboardFocus') == True,r
+assert r.get('keyboardDismissed') == True,r
 print('PASS: demo calls, scalar JSON, file import, persistence, HTTP, concurrent requests, metadata validation, picker callback')
 PY
