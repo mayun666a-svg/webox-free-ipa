@@ -39,7 +39,7 @@ import UniformTypeIdentifiers
                 report["pickerCallbackStatus"]=ui.status.text;report["pickerCallbackSaved"]=Library.shared.sources.contains{$0.id != "tmdb" && !$0.builtin && $0.title == "公开示例"}
                 for s in Library.shared.sources where !s.builtin {Library.shared.remove(s.id)};ui.dismiss(animated:false)
             }
-            let kb=ImportSheet();root.present(kb,animated:false);kb.loadViewIfNeeded();kb.link.becomeFirstResponder();try? await Task.sleep(nanoseconds:400_000_000);report["keyboardFocus"]=kb.link.isFirstResponder;kb.dismissKeyboard();try? await Task.sleep(nanoseconds:300_000_000);report["keyboardDismissed"]=!kb.link.isFirstResponder;kb.dismiss(animated:false)
+            let kb=ImportSheet();root.present(kb,animated:false);kb.loadViewIfNeeded();kb.link.becomeFirstResponder();try? await Task.sleep(nanoseconds:400_000_000);report["keyboardFocus"]=kb.link.isFirstResponder;kb.dismissKeyboard();try? await Task.sleep(nanoseconds:300_000_000);report["keyboardDismissed"] = !kb.link.isFirstResponder;kb.dismiss(animated:false)
             let networkCode="""
             async function networkProbe(){var r=await Widget.http.get('http://127.0.0.1:8877/probe.json',{params:{one:'1'}});return [{status:r.statusCode,data:r.data}];}
             async function concurrentProbe(){var r=await Promise.all([Widget.http.get('http://127.0.0.1:8877/a.json'),Widget.http.get('http://127.0.0.1:8877/b.json')]);return r.map(x=>({status:x.statusCode,data:x.data}));}
