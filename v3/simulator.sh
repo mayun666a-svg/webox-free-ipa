@@ -15,7 +15,7 @@ xcrun simctl boot "$UDID" || true
 xcrun simctl bootstatus "$UDID" -b
 xcrun simctl status_bar "$UDID" override --time 18:43 --dataNetwork wifi --wifiMode active --wifiBars 3 --batteryState charged --batteryLevel 91
 xcrun simctl install "$UDID" Sim/WeBox.app
-for screen in settings import sources; do
+for screen in settings import import-file sources; do
   xcrun simctl terminate "$UDID" dev.webox.app.ios || true
   xcrun simctl launch "$UDID" dev.webox.app.ios --"$screen"
   sleep 4
@@ -38,6 +38,10 @@ for k in ['loadList','search','loadResource']:
  assert isinstance(r.get(k),list) and len(r[k])>0,(k,r)
 assert r['scalarJSON'] != 'nil',r
 assert r.get('fileImportAdded') == 1,r
+assert r.get('capabilityMetadataImportAdded') == 1,r
+assert r.get('capabilityMetadataImportErrors') == [],r
+assert any('fixture-specific-error' in x for x in r.get('invalidScriptErrors',[])),r
+assert r.get('pickerCallbackSaved') == True,r
 assert r.get('importedList'),r
 assert r.get('libraryReloadCount') == 3,r
 assert r.get('networkProbe',[{}])[0].get('status') == 200,r

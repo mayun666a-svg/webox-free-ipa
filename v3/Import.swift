@@ -7,30 +7,37 @@ import UniformTypeIdentifiers
     let typeGrid=WB.stack(.vertical,6),custom=WB.stack(.vertical,8)
     let types=[("auto","自动识别"),("json","JSON 网页源"),("js","JS 内容源"),("vod","VOD 接口"),("m3u","M3U 直播源"),("podcast","播客 JS 源"),("radio","电台 JS 源")]
     var kind="auto",busy=false;var customButton:UIButton!;var typeButton:UIButton!;var submit:UIButton!;var fileButton:UIButton!;var status=WB.label("",12,false,WB.secondary)
-    init(){super.init("导入内容源")}
+    init(){super.init("导入内容源");fitsContent=true}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidLoad(){super.viewDidLoad();modes.selectedSegmentIndex=0;modes.selectedSegmentTintColor=UIColor.white.withAlphaComponent(0.15);modes.backgroundColor=UIColor.white.withAlphaComponent(0.06);modes.setTitleTextAttributes([.foregroundColor:WB.text,.font:UIFont.systemFont(ofSize:14,weight:.semibold)],for:.normal);modes.heightAnchor.constraint(equalToConstant:48).isActive=true;modes.addAction(UIAction{[weak self]_ in self?.update()},for:.valueChanged);body.addArrangedSubview(modes)
-        typeButton=UIButton(type:.system);typeButton.contentHorizontalAlignment = .right;typeButton.setTitle("自动识别  ﹀",for:.normal);typeButton.tintColor=WB.text;typeButton.titleLabel?.font = .systemFont(ofSize:14,weight:.semibold);typeButton.addAction(UIAction{[weak self]_ in self?.typeGrid.isHidden.toggle()},for:.touchUpInside)
+        typeButton=UIButton(type:.system);typeButton.contentHorizontalAlignment = .right;typeButton.setTitle("自动识别  ﹀",for:.normal);typeButton.tintColor=WB.text;typeButton.titleLabel?.font = .systemFont(ofSize:14,weight:.semibold);typeButton.addAction(UIAction{[weak self]_ in self?.typeGrid.isHidden.toggle();self?.view.setNeedsLayout()},for:.touchUpInside)
         let typeRow=WB.stack(.horizontal);typeRow.alignment = .center;typeRow.addArrangedSubview(WB.label("类型",13,false,WB.secondary));typeRow.addArrangedSubview(typeButton);typeRow.heightAnchor.constraint(equalToConstant:56).isActive=true;body.addArrangedSubview(typeRow)
-        for idx in stride(from:0,to:types.count,by:2){let row=WB.stack(.horizontal,8);row.distribution = .fillEqually;for k in idx..<min(idx+2,types.count){let entry=types[k];let b=WB.button(entry.1){[weak self] in self?.kind=entry.0;self?.typeButton.setTitle(entry.1+"  ﹀",for:.normal);self?.typeGrid.isHidden=true};row.addArrangedSubview(b)};if idx==types.count-1{row.addArrangedSubview(UIView())};typeGrid.addArrangedSubview(row)}
+        for idx in stride(from:0,to:types.count,by:2){let row=WB.stack(.horizontal,8);row.distribution = .fillEqually;for k in idx..<min(idx+2,types.count){let entry=types[k];let b=WB.button(entry.1){[weak self] in self?.kind=entry.0;self?.typeButton.setTitle(entry.1+"  ﹀",for:.normal);self?.typeGrid.isHidden=true;self?.view.setNeedsLayout()};row.addArrangedSubview(b)};if idx==types.count-1{row.addArrangedSubview(UIView())};typeGrid.addArrangedSubview(row)}
         typeGrid.isHidden=true;body.addArrangedSubview(typeGrid);body.addArrangedSubview(link)
         link.keyboardType = .URL;logo.keyboardType = .URL
-        fileButton=WB.button("从设备导入  ·  支持多选，自动识别"){[weak self] in self?.pick()};fileButton.isHidden=true;body.addArrangedSubview(fileButton)
-        customButton=WB.button("自定义名称与图标  ·  点击展开"){[weak self] in guard let self=self else{return};self.custom.isHidden.toggle();self.customButton.setTitle(self.custom.isHidden ? "自定义名称与图标  ·  点击展开":"收起名称与图标",for:.normal)};customButton.contentHorizontalAlignment = .left;customButton.contentEdgeInsets=UIEdgeInsets(top:0,left:16,bottom:0,right:16);body.addArrangedSubview(customButton)
+        fileButton=WB.button("支持选择多个 JS、JSON 或 M3U 文件"){};fileButton.isUserInteractionEnabled=false;fileButton.backgroundColor = .clear;fileButton.setTitleColor(WB.secondary,for:.normal);fileButton.titleLabel?.font = .systemFont(ofSize:12);fileButton.isHidden=true;body.addArrangedSubview(fileButton)
+        customButton=WB.button("自定义名称与图标  ·  点击展开"){[weak self] in guard let self=self else{return};self.custom.isHidden.toggle();self.view.setNeedsLayout();self.customButton.setTitle(self.custom.isHidden ? "自定义名称与图标  ·  点击展开":"收起名称与图标",for:.normal)};customButton.contentHorizontalAlignment = .left;customButton.contentEdgeInsets=UIEdgeInsets(top:0,left:16,bottom:0,right:16);body.addArrangedSubview(customButton)
         custom.addArrangedSubview(WB.label("名称（可选）",12,false,WB.secondary));custom.addArrangedSubview(name);custom.addArrangedSubview(WB.label("图标 URL（可选）",12,false,WB.secondary));custom.addArrangedSubview(logo);custom.isHidden=true;body.addArrangedSubview(custom)
-        status.numberOfLines=0;body.addArrangedSubview(status)
+        status.numberOfLines=0;status.isHidden=true;bottom.addArrangedSubview(status)
         submit=WB.button("导入链接",true){[weak self] in self?.runImport()};bottom.addArrangedSubview(submit)
         link.addAction(UIAction{[weak self]_ in self?.update()},for:.editingChanged);update()
     }
-    func update(){let file=modes.selectedSegmentIndex==1;link.isHidden=file;fileButton.isHidden = !file;submit.setTitle(file ? "选择文件":"导入链接",for:.normal);let active=file || !(link.text ?? "").trimmingCharacters(in:.whitespacesAndNewlines).isEmpty;submit.isEnabled=active && !busy;submit.alpha=active ? 1:0.5}
-    func pick(){let p=UIDocumentPickerViewController(forOpeningContentTypes:[.item],asCopy:false);p.allowsMultipleSelection=true;p.delegate=self;present(p,animated:true)}
+    func update(){let file=modes.selectedSegmentIndex==1;link.isHidden=file;fileButton.isHidden = !file;submit.setTitle(file ? "选择文件":"导入链接",for:.normal);let active=file || !(link.text ?? "").trimmingCharacters(in:.whitespacesAndNewlines).isEmpty;submit.isEnabled=active && !busy;submit.alpha=active ? 1:0.5;view.setNeedsLayout()}
+    func pick(){let p=UIDocumentPickerViewController(forOpeningContentTypes:[.item],asCopy:true);p.allowsMultipleSelection=true;p.delegate=self;present(p,animated:true)}
     func runImport(){if modes.selectedSegmentIndex==1{pick();return};guard let str=link.text?.trimmingCharacters(in:.whitespacesAndNewlines),let u=URL(string:str),["http","https"].contains(u.scheme ?? "") else {error("请输入完整的 HTTP 或 HTTPS 链接");return};perform([u])}
-    func documentPicker(_ controller:UIDocumentPickerViewController,didPickDocumentsAt urls:[URL]){perform(urls)}
-    func perform(_ urls:[URL]){guard !busy else{return};busy=true;submit.isEnabled=false;view.endEditing(true)
+    func documentPicker(_ controller:UIDocumentPickerViewController,didPickDocumentsAt urls:[URL]){DispatchQueue.main.asyncAfter(deadline:.now()+0.3){self.perform(urls)}}
+    func documentPickerWasCancelled(_ controller:UIDocumentPickerViewController){busy=false;update()}
+    func perform(_ urls:[URL]){guard !busy else{return};busy=true;status.isHidden=false;status.text="正在读取文件…";submit.isEnabled=false;view.endEditing(true);Library.shared.lastImportWarning="";view.setNeedsLayout()
         Task { @MainActor in var added=0;var errors:[String]=[]
             for (idx,u) in urls.enumerated(){submit.setTitle("正在导入 \(idx+1)/\(urls.count)…",for:.normal);let r=await Library.shared.importURL(u,kind:kind,name:name.text ?? "",logo:logo.text ?? "");added += r.added.count;errors += r.failed}
             status.text=added>0 ? "已导入 \(added) 个内容源。可以继续添加，或关闭后在发现页切换。":"未能导入"
+            if !Library.shared.lastImportWarning.isEmpty{status.text=(status.text ?? "")+"\n"+Library.shared.lastImportWarning}
             if !errors.isEmpty{status.text=(status.text ?? "")+"\n\n"+errors.joined(separator:"\n")};busy=false;update()
+            let log:[String:Any]=["files":urls.map{$0.lastPathComponent},"added":added,"errors":errors,"warning":Library.shared.lastImportWarning]
+            let output=Library.shared.folder.deletingLastPathComponent().appendingPathComponent("last-import-result.json");try? jsonText(log).write(to:output,atomically:true,encoding:.utf8)
+            if added==0 && !errors.isEmpty {error(errors.joined(separator:"\n"))}
+            UIAccessibility.post(notification:.announcement,argument:status.text)
+
         }
     }
 }

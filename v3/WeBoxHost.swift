@@ -49,6 +49,7 @@ final class SyncBridge {
     let defaults = UserDefaults.standard
     let cache = NSCache<NSString, NSString>()
     var binaryHandles: [String: Data] = [:]
+    var metadataOnly = false
 
     func run(_ raw: String) -> String? {
         guard let data = raw.data(using: .utf8),
@@ -59,7 +60,7 @@ final class SyncBridge {
 
         // --- 能力声明 ---
         case "runtime.capabilities":
-            return json(["compute": true, "dom": false, "memoryHls": true,
+            return json(["compute": true, "dom": metadataOnly, "memoryHls": true,
                          "mediaProcessor": true, "binary": true, "protocol": "0.0.7"])
 
         // --- URL ---
@@ -322,9 +323,11 @@ final class JSRuntime {
     let sync = SyncBridge()
     let async = AsyncBridge()
     var bundle: Bundle { .main }
+    var lastError: String?
 
-    init() {
-        ctx.exceptionHandler = { _, e in print("[WeBox JS exception]", e?.toString() ?? "") }
+    init(metadataOnly: Bool = false) {
+        sync.metadataOnly = metadataOnly
+        ctx.exceptionHandler = { [weak self] _, e in self?.lastError = e?.toString() ?? "未知脚本错误"; print("[WeBox JS exception]", self?.lastError ?? "") }
 
         // __nativeSync — 同步，返回 String?
         let syncFn: @convention(block) (String) -> String? = { [weak self] raw in
@@ -381,8 +384,13 @@ final class JSRuntime {
 
     /// 加载一个模块 .js 并读回它的 WidgetMetadata / WeBox.define 元数据
     func loadModule(_ js: String) -> String {
+        lastError = nil
+        ctx.exception = nil
         ctx.evaluateScript(js)
-        return ctx.evaluateScript("JSON.stringify(typeof __weboxMetadata==='function'?JSON.parse(__weboxMetadata()):null)")?.toString() ?? "null"
+        if let error = lastError { return "{\"__error__\":" + jsQuote(error) + "}" }
+        let result = ctx.evaluateScript("JSON.stringify(typeof __weboxMetadata==='function'?JSON.parse(__weboxMetadata()):null)")?.toString() ?? "null"
+        if let error = lastError { return "{\"__error__\":" + jsQuote(error) + "}" }
+        return result
     }
 
     /// 调用模块导出函数（widget.js 的 __weboxInvoke），返回 JSON 字符串。

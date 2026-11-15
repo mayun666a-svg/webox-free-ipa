@@ -14,6 +14,7 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
     static let shared = Library()
     let folder:URL
     var sources:[Source] = []
+    var lastImportWarning = ""
     var selected:String { get { UserDefaults.standard.string(forKey:"selectedSource") ?? "tmdb" } set { UserDefaults.standard.set(newValue,forKey:"selectedSource") } }
     var favorites:[[String:Any]] { get { (UserDefaults.standard.array(forKey:"wbFavorites") as? [[String:Any]]) ?? [] } set { UserDefaults.standard.set(newValue,forKey:"wbFavorites") } }
     init() {
@@ -35,7 +36,16 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
     }
     func content(_ url:URL) async throws ->String {
         let d:Data
-        if url.isFileURL { let access=url.startAccessingSecurityScopedResource();defer {if access {url.stopAccessingSecurityScopedResource()}};d=try Data(contentsOf:url) }
+        if url.isFileURL {
+            let access=url.startAccessingSecurityScopedResource();defer {if access {url.stopAccessingSecurityScopedResource()}}
+            var readingError:Error?;var coordinationError:NSError?;var readData:Data?
+            NSFileCoordinator().coordinate(readingItemAt:url,options:[],error:&coordinationError){ coordinated in
+                do {readData=try Data(contentsOf:coordinated,options:.mappedIfSafe)} catch {readingError=error}
+            }
+            if let e=coordinationError {throw WBError(message:"无法从文件提供器读取："+e.localizedDescription)}
+            if let e=readingError {throw WBError(message:"无法打开文件："+e.localizedDescription)}
+            guard let bytes=readData else {throw WBError(message:"文件尚未下载到本机，请在文件 App 中下载后重试")};d=bytes
+        }
         else { var q=URLRequest(url:url);q.timeoutInterval=30;let (data,r)=try await URLSession.shared.data(for:q);guard let h=r as? HTTPURLResponse,(200...299).contains(h.statusCode) else {throw WBError(message:"下载失败：HTTP \((r as? HTTPURLResponse)?.statusCode ?? 0)")};d=data }
         guard d.count<=2*1024*1024 else {throw WBError(message:"文件超过 2 MB 限制")}
         guard let s=String(data:d,encoding:.utf8) else {throw WBError(message:"文件不是 UTF-8 文本")};return s
@@ -59,7 +69,7 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
         return result
     }
     func add(_ text:String,url:URL,kind:String,name:String,logo:String) async throws ->Source {
-        let t=text.trimmingCharacters(in:.whitespacesAndNewlines);var detected="";var title=name;var declaredIcon=logo
+        let t=text.trimmingCharacters(in:CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn:"\uFEFF")));var detected="";var title=name;var declaredIcon=logo
         if t.hasPrefix("#EXTM3U") {detected="m3u"}
         else if let o=jsonValue(t) as? [String:Any] {
             if o["class"] != nil && o["list"] != nil {detected="vod"}
@@ -67,8 +77,10 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
         }
         if t.contains("WidgetMetadata") || t.range(of:"WeBox\\s*\\.\\s*define\\s*\\(",options:.regularExpression) != nil || t.contains("getPlayinfo") {
             detected="js"
-            let rt=JSRuntime();rt.loadRuntime();let raw=rt.loadModule(text)
-            guard let meta=jsonValue(raw) as? [String:Any],let moduleID=meta["id"] as? String,!moduleID.isEmpty else {throw WBError(message:"脚本缺少有效的模块元数据")}
+            let rt=JSRuntime(metadataOnly:true);rt.loadRuntime();let raw=rt.loadModule(t)
+            if let e=(jsonValue(raw) as? [String:Any])?["__error__"] as? String {throw WBError(message:"脚本注册失败："+e)}
+            guard let meta=jsonValue(raw) as? [String:Any],let moduleID=meta["id"] as? String,!moduleID.isEmpty else {throw WBError(message:"未读到 WidgetMetadata 或 WeBox.define 元数据，请确认选择的是 JS 内容源")}
+            if let requires=t.range(of:"requires\\s*:\\s*\\[[^\\]]*\\]",options:.regularExpression),String(t[requires]).contains("dom") {lastImportWarning="已保存脚本；此脚本声明 DOM 能力，当前版本的浏览验证尚未实现。"}
             if title.isEmpty {title=meta["title"] as? String ?? url.lastPathComponent}
             detected=meta["sourceCategory"] as? String ?? "js"
             if declaredIcon.isEmpty {declaredIcon=meta["icon"] as? String ?? ""}

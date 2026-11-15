@@ -1,11 +1,12 @@
 import UIKit
+import UniformTypeIdentifiers
 @MainActor final class AppDelegate:NSObject,UIApplicationDelegate {
     var window:UIWindow?
     func application(_ application:UIApplication,didFinishLaunchingWithOptions options:[UIApplication.LaunchOptionsKey:Any]?) ->Bool {
         window=UIWindow(frame:UIScreen.main.bounds);let root=RootController();window?.rootViewController=root;window?.makeKeyAndVisible()
         let args=ProcessInfo.processInfo.arguments
-        if args.contains("--settings") || args.contains("--import") || args.contains("--sources") {root.switchTo(2)}
-        DispatchQueue.main.asyncAfter(deadline:.now()+0.8){if args.contains("--import"){root.settings.present(ImportSheet(),animated:false)}else if args.contains("--sources"){root.settings.present(SourceSheet(),animated:false)}}
+        if args.contains("--settings") || args.contains("--import") || args.contains("--import-file") || args.contains("--sources") {root.switchTo(2)}
+        DispatchQueue.main.asyncAfter(deadline:.now()+0.8){if args.contains("--import") || args.contains("--import-file"){let sheet=ImportSheet();root.settings.present(sheet,animated:false);sheet.loadViewIfNeeded();if args.contains("--import-file"){sheet.modes.selectedSegmentIndex=1;sheet.update()}}else if args.contains("--sources"){root.settings.present(SourceSheet(),animated:false)}}
         if args.contains("--self-test") {Task { @MainActor in
             var report:[String:Any]=[:]
             let rt=JSRuntime();rt.loadRuntime()
@@ -19,6 +20,23 @@ import UIKit
                 report["fileImportAdded"]=imported.added.count;report["fileImportFailed"]=imported.failed
                 if let added=imported.added.first,let session=try? ModuleSession(added) {report["importedList"]=try? await session.list();Library.shared.remove(added.id)}
                 report["libraryReloadCount"]=Library().sources.count
+            }
+            let fixture=dir.appendingPathComponent("dom-declaration.webox.js")
+            let fixtureCode="""
+            WeBox.define({api:'1.4',id:'test.dom.metadata',name:'DOM声明导入测试',version:'1.0.0',requires:['dom'],list:async()=>({items:[],nextCursor:null}),detail:async()=>({}),play:async()=>({sources:[]})});
+            """
+            try? fixtureCode.write(to:fixture,atomically:true,encoding:.utf8)
+            let declaration=await Library.shared.importURL(fixture)
+            report["capabilityMetadataImportAdded"]=declaration.added.count;report["capabilityMetadataImportErrors"]=declaration.failed
+            report["capabilityMetadataWarning"]=Library.shared.lastImportWarning
+            for item in declaration.added {Library.shared.remove(item.id)}
+            let bad=dir.appendingPathComponent("bad-script.js");try? "WidgetMetadata={id:'broken'};throw new Error('fixture-specific-error');".write(to:bad,atomically:true,encoding:.utf8)
+            let rejected=await Library.shared.importURL(bad);report["invalidScriptErrors"]=rejected.failed
+            if let demo=Bundle.main.url(forResource:"demo",withExtension:"js",subdirectory:"modules") {
+                let ui=ImportSheet();root.present(ui,animated:false);ui.loadViewIfNeeded();ui.documentPicker(UIDocumentPickerViewController(forOpeningContentTypes:[.item],asCopy:true),didPickDocumentsAt:[demo])
+                try? await Task.sleep(nanoseconds:1_500_000_000)
+                report["pickerCallbackStatus"]=ui.status.text;report["pickerCallbackSaved"]=Library.shared.sources.contains{$0.id != "tmdb" && !$0.builtin && $0.title == "公开示例"}
+                for s in Library.shared.sources where !s.builtin {Library.shared.remove(s.id)};ui.dismiss(animated:false)
             }
             let networkCode="""
             async function networkProbe(){var r=await Widget.http.get('http://127.0.0.1:8877/probe.json',{params:{one:'1'}});return [{status:r.statusCode,data:r.data}];}

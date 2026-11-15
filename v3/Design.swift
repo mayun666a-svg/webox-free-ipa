@@ -60,19 +60,37 @@ class Badge:UIImageView {
 }
 
 class SheetVC:UIViewController {
+    private var preferredHeight:CGFloat=500
+    var fitsContent=false
     let body=WB.stack(.vertical,12);let bottom=WB.stack(.vertical,8);let scroll=UIScrollView();var caption:String
     init(_ title:String){caption=title;super.init(nibName:nil,bundle:nil);modalPresentationStyle = .pageSheet}
     required init?(coder:NSCoder){fatalError()}
     override func viewDidLoad(){super.viewDidLoad();view.backgroundColor=WB.bg;overrideUserInterfaceStyle = .dark
-        if let s=sheetPresentationController{s.prefersGrabberVisible=true;s.preferredCornerRadius=28;s.detents=[.custom(identifier:.init("content")){_ in 520},.large()];s.prefersScrollingExpandsWhenScrolledToEdge=true}
+        if let s=sheetPresentationController{s.prefersGrabberVisible=true;s.preferredCornerRadius=28;s.detents=[.custom(identifier:.init("content")){[weak self] ctx in min(self?.preferredHeight ?? 500,ctx.maximumDetentValue)},.large()];s.selectedDetentIdentifier = .init("content");s.prefersScrollingExpandsWhenScrolledToEdge=true}
         let blur=UIVisualEffectView(effect:UIBlurEffect(style:.systemUltraThinMaterialDark));blur.frame=view.bounds;blur.autoresizingMask=[.flexibleWidth,.flexibleHeight];view.addSubview(blur)
         let header=WB.stack(.horizontal,8);header.alignment = .center;header.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(header);header.addArrangedSubview(WB.label(caption,19,true));let close=UIButton(type:.system);close.setImage(UIImage(systemName:"xmark"),for:.normal);close.tintColor=WB.secondary;close.widthAnchor.constraint(equalToConstant:48).isActive=true;close.heightAnchor.constraint(equalToConstant:48).isActive=true;close.addAction(UIAction{[weak self]_ in self?.dismiss(animated:true)},for:.touchUpInside);header.addArrangedSubview(close)
         scroll.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(scroll);scroll.keyboardDismissMode = .interactive;body.translatesAutoresizingMaskIntoConstraints=false;scroll.addSubview(body);bottom.translatesAutoresizingMaskIntoConstraints=false;view.addSubview(bottom)
         NSLayoutConstraint.activate([header.topAnchor.constraint(equalTo:view.topAnchor,constant:22),header.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),header.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-12),scroll.topAnchor.constraint(equalTo:header.bottomAnchor,constant:10),scroll.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),scroll.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-20),scroll.bottomAnchor.constraint(equalTo:bottom.topAnchor,constant:-12),body.topAnchor.constraint(equalTo:scroll.contentLayoutGuide.topAnchor),body.bottomAnchor.constraint(equalTo:scroll.contentLayoutGuide.bottomAnchor),body.leadingAnchor.constraint(equalTo:scroll.contentLayoutGuide.leadingAnchor),body.trailingAnchor.constraint(equalTo:scroll.contentLayoutGuide.trailingAnchor),body.widthAnchor.constraint(equalTo:scroll.frameLayoutGuide.widthAnchor),bottom.leadingAnchor.constraint(equalTo:view.leadingAnchor,constant:20),bottom.trailingAnchor.constraint(equalTo:view.trailingAnchor,constant:-20),bottom.bottomAnchor.constraint(equalTo:view.safeAreaLayoutGuide.bottomAnchor,constant:-14)])
     }
+    override func viewDidLayoutSubviews(){super.viewDidLayoutSubviews();resizeToContents()}
+    func resizeToContents(){guard fitsContent,view.bounds.width>0 else{return};let width=max(1,view.bounds.width-40);let bodySize=body.systemLayoutSizeFitting(CGSize(width:width,height:0),withHorizontalFittingPriority:.required,verticalFittingPriority:.fittingSizeLevel);let footer=bottom.systemLayoutSizeFitting(CGSize(width:width,height:0),withHorizontalFittingPriority:.required,verticalFittingPriority:.fittingSizeLevel)
+        let desired=max(360,22+48+10+bodySize.height+12+footer.height+14+view.safeAreaInsets.bottom)
+        if abs(desired-preferredHeight)>2 {preferredHeight=desired;sheetPresentationController?.invalidateDetents()}
+    }
     func error(_ message:String){let a=UIAlertController(title:"未能完成",message:message,preferredStyle:.alert);a.addAction(UIAlertAction(title:"好",style:.default));present(a,animated:true)}
 }
 
-final class PillSegment:UISegmentedControl {
-    override func layoutSubviews(){super.layoutSubviews();layer.cornerRadius=24;layer.masksToBounds=true;layer.borderWidth=0.75;layer.borderColor=UIColor.white.withAlphaComponent(0.20).cgColor;for child in subviews where child is UIImageView {child.layer.cornerRadius=22;child.clipsToBounds=true}}
+final class PillSegment:UIControl {
+    var selectedSegmentIndex:Int = 0 {didSet{refresh()}}
+    var selectedSegmentTintColor:UIColor? {didSet{refresh()}}
+    private let titles:[String];private let selection=UIView();private let row=UIStackView();private var buttons:[UIButton]=[]
+    init(items:[String]){titles=items;super.init(frame:.zero);layer.cornerRadius=24;layer.borderWidth=0.75;layer.borderColor=UIColor.white.withAlphaComponent(0.20).cgColor;backgroundColor=UIColor.white.withAlphaComponent(0.045);clipsToBounds=true
+        selection.isUserInteractionEnabled=false;selection.layer.cornerRadius=21;selection.layer.borderWidth=0.7;selection.layer.borderColor=UIColor.white.withAlphaComponent(0.25).cgColor;addSubview(selection)
+        row.axis = .horizontal;row.distribution = .fillEqually;addSubview(row)
+        for (i,t) in items.enumerated(){let b=UIButton(type:.system);b.setTitle(t,for:.normal);b.titleLabel?.font = .systemFont(ofSize:14,weight:.semibold);b.setTitleColor(WB.text,for:.normal);b.addAction(UIAction{[weak self]_ in self?.selectedSegmentIndex=i;self?.sendActions(for:.valueChanged)},for:.touchUpInside);row.addArrangedSubview(b);buttons.append(b)};refresh()
+    }
+    required init?(coder:NSCoder){fatalError()}
+    func setTitleTextAttributes(_ attributes:[NSAttributedString.Key:Any]?,for state:UIControl.State){}
+    private func refresh(){selection.backgroundColor=selectedSegmentTintColor ?? UIColor.white.withAlphaComponent(0.12);buttons.enumerated().forEach{$0.element.alpha=$0.offset==selectedSegmentIndex ? 1:0.65};setNeedsLayout()}
+    override func layoutSubviews(){super.layoutSubviews();row.frame=bounds.insetBy(dx:3,dy:3);let width=row.bounds.width/CGFloat(max(titles.count,1));selection.frame=CGRect(x:3+CGFloat(selectedSegmentIndex)*width,y:3,width:width,height:max(0,bounds.height-6))}
 }
