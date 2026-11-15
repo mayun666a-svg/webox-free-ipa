@@ -5,7 +5,7 @@ import UniformTypeIdentifiers
     func application(_ application:UIApplication,didFinishLaunchingWithOptions options:[UIApplication.LaunchOptionsKey:Any]?) ->Bool {
         window=UIWindow(frame:UIScreen.main.bounds);let root=RootController();window?.rootViewController=root;window?.makeKeyAndVisible()
         let args=ProcessInfo.processInfo.arguments
-        if args.contains("--settings") || args.contains("--import") || args.contains("--import-file") || args.contains("--sources") {root.switchTo(2)}
+        if args.contains("--settings") || args.contains("--import") || args.contains("--import-file") || args.contains("--import-keyboard") || args.contains("--sources") {root.switchTo(2)}
         if args.contains("--home") {root.switchTo(0)}
         DispatchQueue.main.asyncAfter(deadline:.now()+0.8){if args.contains("--import") || args.contains("--import-file") || args.contains("--import-keyboard"){let sheet=ImportSheet();root.settings.present(sheet,animated:false);sheet.loadViewIfNeeded();if args.contains("--import-file"){sheet.modes.selectedSegmentIndex=1;sheet.update()}else if args.contains("--import-keyboard"){DispatchQueue.main.asyncAfter(deadline:.now()+0.4){sheet.link.becomeFirstResponder()}}}else if args.contains("--sources"){root.settings.present(SourceSheet(),animated:false)}}
         if args.contains("--self-test") {Task { @MainActor in
