@@ -38,14 +38,14 @@ for k in ['loadList','search','loadResource']:
  assert isinstance(r.get(k),list) and len(r[k])>0,(k,r)
 assert r['scalarJSON'] != 'nil',r
 assert r.get('fileImportAdded') == 1,r
-assert r.get('capabilityMetadataImportAdded') == 1,r
-assert r.get('capabilityMetadataImportErrors') == [],r
-assert any('fixture-specific-error' in x for x in r.get('invalidScriptErrors',[])),r
-assert r.get('pickerCallbackSaved') == True,r
 assert r.get('importedList'),r
 assert r.get('libraryReloadCount') == 3,r
 assert r.get('networkProbe',[{}])[0].get('status') == 200,r
 assert len(r.get('concurrentProbe',[])) == 2,r
 assert all(x['status'] == 200 for x in r['concurrentProbe']),r
-print('PASS: demo calls, scalar JSON, file import, persistence, HTTP, concurrent requests')
+assert r.get('capabilityMetadataImportAdded') == 1,r
+assert r.get('capabilityMetadataImportErrors') == [],r
+assert any('fixture-specific-error' in x for x in r.get('invalidScriptErrors',[])),r
+assert r.get('pickerCallbackSaved') == True,r
+print('PASS: demo calls, scalar JSON, file import, persistence, HTTP, concurrent requests, metadata validation, picker callback')
 PY
