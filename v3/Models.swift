@@ -69,7 +69,7 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
         return result
     }
     func add(_ text:String,url:URL,kind:String,name:String,logo:String) async throws ->Source {
-        let t=text.trimmingCharacters(in:CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn:"\uFEFF")));var detected="";var title=name;var declaredIcon=logo
+        let t=text.trimmingCharacters(in:CharacterSet.whitespacesAndNewlines.union(CharacterSet(charactersIn:"\u{FEFF}")));var detected="";var title=name;var declaredIcon=logo
         if t.hasPrefix("#EXTM3U") {detected="m3u"}
         else if let o=jsonValue(t) as? [String:Any] {
             if o["class"] != nil && o["list"] != nil {detected="vod"}
