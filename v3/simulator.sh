@@ -49,5 +49,6 @@ assert any('fixture-specific-error' in x for x in r.get('invalidScriptErrors',[]
 assert r.get('pickerCallbackSaved') == True,r
 assert r.get('keyboardFocus') == True,r
 assert r.get('keyboardDismissed') == True,r
+assert r.get('moduleSettingsInjected') == 'https://example.test',r
 print('PASS: demo calls, scalar JSON, file import, persistence, HTTP, concurrent requests, metadata validation, picker callback')
 PY

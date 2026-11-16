@@ -33,14 +33,16 @@ import AVKit
 }
 
 @MainActor final class BrowsePage:ScrollPage {
-    var session:ModuleSession?;var source:Source?;var items:[[String:Any]]=[];var menus:[FavoriteMenu]=[];let grid=WB.stack(.vertical,12);var titleButton:UIButton!;var query=WB.field("搜索")
+    var session:ModuleSession?;var source:Source?;var items:[[String:Any]]=[];var menus:[FavoriteMenu]=[];let grid=WB.stack(.vertical,12);var titleButton:UIButton!;var settingsButton:UIButton!;var query=WB.field("搜索")
     override func viewDidLoad(){super.viewDidLoad();heading.text="发现";let top=WB.stack(.vertical,10);top.isLayoutMarginsRelativeArrangement=true;top.layoutMargins=UIEdgeInsets(top:2,left:20,bottom:12,right:20)
         let sourceRow=WB.stack(.horizontal,10);sourceRow.alignment = .center
         titleButton=UIButton(type:.system);titleButton.setTitle("TMDB  ﹀",for:.normal);titleButton.titleLabel?.font = .systemFont(ofSize:14,weight:.semibold);titleButton.setTitleColor(WB.text,for:.normal);titleButton.backgroundColor=UIColor.white.withAlphaComponent(0.055);titleButton.layer.cornerRadius=18;titleButton.contentEdgeInsets=UIEdgeInsets(top:0,left:14,bottom:0,right:14);titleButton.heightAnchor.constraint(equalToConstant:36).isActive=true;titleButton.widthAnchor.constraint(lessThanOrEqualToConstant:220).isActive=true;titleButton.setContentHuggingPriority(.required,for:.horizontal);titleButton.addAction(UIAction{[weak self] _ in self?.present(SourceSheet(onSelect:{s in self?.load(s)}),animated:true)},for:.touchUpInside)
-        sourceRow.addArrangedSubview(titleButton);sourceRow.addArrangedSubview(UIView());top.addArrangedSubview(sourceRow)
+        sourceRow.addArrangedSubview(titleButton);sourceRow.addArrangedSubview(UIView())
+        settingsButton=UIButton(type:.system);settingsButton.setImage(WB.image("gearshape"),for:.normal);settingsButton.tintColor=WB.secondary;settingsButton.widthAnchor.constraint(equalToConstant:36).isActive=true;settingsButton.heightAnchor.constraint(equalToConstant:36).isActive=true;settingsButton.isHidden=true;settingsButton.addAction(UIAction{[weak self] _ in self?.openSettings()},for:.touchUpInside);sourceRow.addArrangedSubview(settingsButton);top.addArrangedSubview(sourceRow)
         query.returnKeyType = .search;query.addTarget(self,action:#selector(searchNow),for:.editingDidEndOnExit);top.addArrangedSubview(query);content.addArrangedSubview(top);grid.isLayoutMarginsRelativeArrangement=true;grid.layoutMargins=UIEdgeInsets(top:8,left:20,bottom:0,right:20);content.addArrangedSubview(grid);load(Library.shared.source(Library.shared.selected) ?? Library.shared.sources[0])}
     @objc func searchNow(){query.resignFirstResponder();guard let s=source else{return};Task {await fetch(s,query:query.text ?? "")}}
-    func load(_ s:Source){loadViewIfNeeded();source=s;Library.shared.selected=s.id;titleButton.setTitle(s.title+"  ﹀",for:.normal);heading.text="发现";Task {await fetch(s)}}
+    func load(_ s:Source){loadViewIfNeeded();source=s;Library.shared.selected=s.id;if session?.source.id != s.id{session=nil};settingsButton?.isHidden=true;titleButton.setTitle(s.title+"  ﹀",for:.normal);heading.text="发现";Task {await fetch(s)}}
+    func openSettings(){guard let session=session else{return};let sheet=ModuleSettingsSheet(session:session){[weak self] in guard let self=self else{return};Task{await self.fetch(session.source)}};present(sheet,animated:true)}
     func message(_ text:String){grid.arrangedSubviews.forEach{$0.removeFromSuperview()};let l=WB.label(text,14,false,WB.secondary);l.numberOfLines=0;l.textAlignment = .center;grid.addArrangedSubview(l)}
     func fetch(_ s:Source,query:String?=nil) async {
         message("加载中…")
@@ -49,8 +51,17 @@ import AVKit
             if s.kind=="m3u" {let t=try Library.shared.code(s);var name="";items=[];for line in t.components(separatedBy:.newlines){if line.hasPrefix("#EXTINF"){name=String(line.split(separator:",",maxSplits:1).last ?? "直播")}else if line.hasPrefix("http"){items.append(["title":name,"videoUrl":line])}};render(items);return}
             guard ["js","podcast","radio"].contains(s.kind) else {message("已保存的 \(s.kind.uppercased()) 内容源。此版本尚未实现该格式的浏览解析。");return}
             if session?.source.id != s.id {session=try ModuleSession(s)}
+            settingsButton.isHidden = !(session?.hasGlobalFields ?? false)
             items=try await session!.list(query);render(items)
-        }catch{message(error.localizedDescription)}
+        }catch{
+            let text=error.localizedDescription
+            if text.contains("API 地址") || text.contains("模块设置") {
+                settingsButton.isHidden = !(session?.hasGlobalFields ?? false)
+                let alert=UIAlertController(title:"这个源需要模块设置",message:text,preferredStyle:.alert)
+                alert.addAction(UIAlertAction(title:"去设置",style:.default){[weak self]_ in self?.openSettings()})
+                alert.addAction(UIAlertAction(title:"取消",style:.cancel));present(alert,animated:true)
+            } else { message(text) }
+        }
     }
     func tmdb(_ q:String?) async throws {
         let base=UserDefaults.standard.string(forKey:"tmdbBase") ?? "https://tmdb.quswer.com/"

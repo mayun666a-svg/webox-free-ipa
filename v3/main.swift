@@ -31,6 +31,15 @@ import UniformTypeIdentifiers
             report["capabilityMetadataImportAdded"]=declaration.added.count;report["capabilityMetadataImportErrors"]=declaration.failed
             report["capabilityMetadataWarning"]=Library.shared.lastImportWarning
             for item in declaration.added {Library.shared.remove(item.id)}
+            let settingsFixture=dir.appendingPathComponent("module-settings-test.js")
+            let settingsCode="""
+            WidgetMetadata={id:'test.module.settings',title:'模块设置测试',version:'1.0.0',requiredVersion:'0.0.1',globalParams:[{name:'apiBase',title:'API 地址',type:'input',value:''}],modules:[{id:'list',title:'列表',functionName:'loadList',params:[]}]};
+            async function loadList(params){return [{id:'probe',title:String(params.apiBase||'EMPTY'),type:'url',link:'probe'}]}
+            """
+            try? settingsCode.write(to:settingsFixture,atomically:true,encoding:.utf8)
+            let settingsImport=await Library.shared.importURL(settingsFixture)
+            if let source=settingsImport.added.first,let session=try? ModuleSession(source){session.saveSettings(["apiBase":"https://example.test"]);let rows=try? await session.list();report["moduleSettingsInjected"]=(rows?.first?["title"] as? String) ?? "nil";Library.shared.remove(source.id)}
+            else {report["moduleSettingsInjected"]="import-failed";report["moduleSettingsErrors"]=settingsImport.failed}
             let bad=dir.appendingPathComponent("bad-script.js");try? "WidgetMetadata={id:'broken'};throw new Error('fixture-specific-error');".write(to:bad,atomically:true,encoding:.utf8)
             let rejected=await Library.shared.importURL(bad);report["invalidScriptErrors"]=rejected.failed
             if let demo=Bundle.main.url(forResource:"demo",withExtension:"js",subdirectory:"modules") {

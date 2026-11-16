@@ -65,3 +65,23 @@ import UniformTypeIdentifiers
     }
     func manage(_ s:Source){let a=UIAlertController(title:s.title,message:nil,preferredStyle:.actionSheet);a.addAction(UIAlertAction(title:"在发现页浏览",style:.default){[weak self]_ in Library.shared.selected=s.id;self?.dismiss(animated:true){self?.choose?(s)}});if !s.builtin{a.addAction(UIAlertAction(title:"移除内容源",style:.destructive){_ in Library.shared.remove(s.id)})};a.addAction(UIAlertAction(title:"取消",style:.cancel));a.popoverPresentationController?.sourceView=view;present(a,animated:true)}
 }
+
+@MainActor final class ModuleSettingsSheet:SheetVC {
+    let session:ModuleSession;let fields:[[String:Any]];var editors:[UITextField]=[];var onSave:(()->Void)?
+    init(session:ModuleSession,onSave:@escaping()->Void){self.session=session;self.fields=session.globalFields;self.onSave=onSave;super.init("模块设置")}
+    required init?(coder:NSCoder){fatalError()}
+    override func viewDidLoad(){super.viewDidLoad();fitsContent=false
+        let hint=WB.label("这里填的是该内容源自己的参数，不是 TMDB API Key。",12,false,WB.secondary);hint.numberOfLines=0;body.addArrangedSubview(hint)
+        for field in fields {
+            let name=field["name"] as? String ?? ""
+            let title=field["title"] as? String ?? name
+            body.addArrangedSubview(WB.label(title,12,false,WB.secondary))
+            let editor=WB.field(field["placeholder"] as? String ?? title)
+            editor.text=session.settings[name] ?? (field["value"] as? String ?? "")
+            editor.autocapitalizationType = .none;editor.autocorrectionType = .no;editor.keyboardType = .URL
+            editors.append(editor);body.addArrangedSubview(editor)
+        }
+        if fields.isEmpty {body.addArrangedSubview(WB.label("这个模块没有可配置参数。",13,false,WB.secondary))}
+        bottom.addArrangedSubview(WB.button("保存",true){[weak self] in guard let self=self else{return};var values:[String:String]=[:];for (i,field) in self.fields.enumerated(){let name=field["name"] as? String ?? "";values[name]=self.editors[i].text ?? ""};self.session.saveSettings(values);self.dismiss(animated:true){self.onSave?()}})
+    }
+}

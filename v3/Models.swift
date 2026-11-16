@@ -95,12 +95,31 @@ struct WBError: LocalizedError { var message:String; var errorDescription:String
 }
 
 @MainActor final class ModuleSession {
-    let runtime=JSRuntime();let source:Source;var metadata:[String:Any]=[:];var parameters:[String:Any]=[:]
-    init(_ s:Source)throws { source=s;runtime.loadRuntime();metadata=(jsonValue(runtime.loadModule(try Library.shared.code(s))) as? [String:Any]) ?? [:];guard !metadata.isEmpty else {throw WBError(message:"读取脚本元数据失败")} }
+    let runtime=JSRuntime();let source:Source;var metadata:[String:Any]=[:];var parameters:[String:Any]=[:];var settings:[String:String]=[:]
+    var globalFields:[[String:Any]] { (metadata["globalParams"] as? [[String:Any]]) ?? [] }
+    var hasGlobalFields:Bool { !globalFields.isEmpty }
+    init(_ s:Source)throws {
+        source=s
+        settings=(UserDefaults.standard.dictionary(forKey:"module.settings."+s.id) as? [String:String]) ?? [:]
+        runtime.loadRuntime()
+        metadata=(jsonValue(runtime.loadModule(try Library.shared.code(s))) as? [String:Any]) ?? [:]
+        guard !metadata.isEmpty else {throw WBError(message:"读取脚本元数据失败")}
+        parameters=settings
+    }
+    func saveSettings(_ values:[String:String]) {
+        settings=values
+        UserDefaults.standard.set(values,forKey:"module.settings."+source.id)
+        parameters=values
+    }
     var native:Bool {metadata["hostProtocol"] as? String == "webox"}
     var listFunction:String { (metadata["modules"] as? [[String:Any]])?.first(where:{$0["type"] as? String != "stream"})?["functionName"] as? String ?? "loadList" }
+    private func merged(_ argument:Any)->Any {
+        guard var d=argument as? [String:Any] else{return argument}
+        for (k,v) in settings where d[k]==nil {d[k]=v}
+        return d
+    }
     func request(_ name:String,_ argument:Any) async throws ->Any {
-        let raw=await runtime.invoke(name:name,argsJSON:jsonText([argument]))
+        let raw=await runtime.invoke(name:name,argsJSON:jsonText([merged(argument)]))
         guard let result=jsonValue(raw) else {throw WBError(message:"脚本返回非 JSON 数据")}
         if let o=result as? [String:Any],let e=o["__error__"] as? String {throw WBError(message:e)}
         return result
